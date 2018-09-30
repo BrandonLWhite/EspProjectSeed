@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+    <title>Configure WiFi</title>
+    <style>
+        div,input{padding:5px;font-size:1em;} 
+        input{width:95%;} 
+        body{text-align: center;font-family:verdana;} 
+        button{border:0;border-radius:0.3rem;background-color:#1fa3ec;color:#fff;line-height:2.4rem;font-size:1.2rem;width:100%;} 
+    </style>
+    <script>
+        window.onload = function() {
+            console.log("onload");
+            getStatus();
+            scanAccessPoints();
+        }
+
+        function getJson(path, callback) {
+            fetch(path).then(response => {
+                response.json().then(callback);
+            });
+        }
+
+        function getStatus() {
+            getJson("wifi/status", status => {
+                console.log("wifi/status", status);
+                renderStatus(status);
+            });
+        }
+
+        function forgetSaved() {
+            fetch("wifi/forget");
+        }
+
+        function scanAccessPoints() {
+            getJson("wifi/scan", scanResult => {
+                console.log("wifi/scan", scanResult);
+                renderScannedAccessPoints(scanResult.accessPoints);
+            });
+        }
+
+        function renderScannedAccessPoints(accessPoints) {
+            const container = document.getElementById("scannedAccessPoints");
+            const entryElements = [];
+            accessPoints.forEach(accessPoint => {
+                entryElements.push(`<div>
+                    <span>${accessPoint.SSID}</span>
+                    <span>${accessPoint.RSSI}</span>
+                </div>`);
+            });
+
+            container.innerHTML = entryElements.join("");
+        }
+
+        function renderStatus(status) {
+            const container = document.getElementById("status");
+            container.innerHTML = `
+                <span>${status.status}</span>
+                <span>${status.SSID}</span>
+                <span>${status.RSSI}</span>
+                <span>${status.IpAddr}</span>
+            `;
+
+            const inputSsid = document.getElementById("inputSsid");
+            if(!inputSsid.value) {
+                inputSsid.value = status.SSID;
+            }
+        }
+    </script>
+</head>
+
+<body>
+    <div style='text-align:left;display:inline-block;min-width:260px;'>
+        <h1>Configure WiFi</h1>
+        <form method='get' action='wifisave'>
+            <input id='inputSsid' name='s' length=32 placeholder='SSID'><br />
+            <input id='p' name='p' length=64 type='password' placeholder='password'><br />
+            <br />
+            <button type='submit'>Save</button>
+        </form>
+        <div>
+            <button onclick="forgetSaved()">Forget</button>
+        </div>    
+        <div id="status"></div>
+        <div>
+            <button onclick="scanAccessPoints()">Scan</button>
+        </div>
+        <div id="scannedAccessPoints"></div>
+    </div>
+</body>
+
+</html>

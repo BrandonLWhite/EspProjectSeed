@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html>
+<body onload="pageLoaded()">
+    <script>
+        // TODO BW: Shouldn't need this anymore. Just use fetch!
+        // https://github.com/yanatan16/nanoajax
+        !function(t,e){function n(t){return t&&e.XDomainRequest&&!/MSIE 1/.test(navigator.userAgent)?new XDomainRequest:e.XMLHttpRequest?new XMLHttpRequest:void 0}function o(t,e,n){t[e]=t[e]||n}var r=["responseType","withCredentials","timeout","onprogress"];t.ajax=function(t,a){function s(t,e){return function(){c||(a(void 0===f.status?t:f.status,0===f.status?"Error":f.response||f.responseText||e,f),c=!0)}}var u=t.headers||{},i=t.body,d=t.method||(i?"POST":"GET"),c=!1,f=n(t.cors);f.open(d,t.url,!0);var l=f.onload=s(200);f.onreadystatechange=function(){4===f.readyState&&l()},f.onerror=s(null,"Error"),f.ontimeout=s(null,"Timeout"),f.onabort=s(null,"Abort"),i&&(o(u,"X-Requested-With","XMLHttpRequest"),e.FormData&&i instanceof e.FormData||o(u,"Content-Type","application/x-www-form-urlencoded"));for(var p,m=0,v=r.length;v>m;m++)p=r[m],void 0!==t[p]&&(f[p]=t[p]);for(var p in u)f.setRequestHeader(p,u[p]);return f.send(i),f},e.nanoajax=t}({},function(){return this}());        
+
+        // https://github.com/gamtiq/duratiform
+        !function(a,b){if("object"==typeof exports)module.exports=b(require,exports,module);else if("function"==typeof define&&define.amd)define(["require","exports","module"],b);else{var c=function(b){return a[b]},d=a,e={exports:d};a.duratiform=b(c,d,e)}}(this,function(a,b,c){function d(a,b,c){function d(b,d){var f;a>=d?(f=e[b]=Math.floor(a/d),a%=d):f=e[b]=0,c&&(e[b+"2"]=10>f?"0"+f:String(f))}var e={};return a=.001*a,b||(b=3),b>3&&d("day",86400),b>2&&d("hour",3600),b>1&&d("minute",60),b>0&&d("second",1),e}function e(a,b){var c,e,f,g,h=[],i=!1,j=!0,k=0,l=[],m={d:["day",4],h:["hour",3],m:["minute",2],s:["second",1]},n="\\";for(b||(b="hh:mm:ss"),c=0,e=b.length;e>c;c++)f=b.charAt(c),i?(h.push(f),i=!1):j&&f in m?(g=m[f],l.push(h.length),b.charAt(c+1)===f?(h.push(g[0]+"2"),c++):h.push(g[0]),g[1]>k&&(k=g[1])):j&&"["===f?j=!1:j||"]"!==f?f===n?i=!0:h.push(f):j=!0;if(e=l.length)for(g=d(a,k,!0),c=0;e>c;c++)k=l[c],h[k]=g[h[k]];return h.join("")}return c.exports={divide:d,format:e},c.exports});
+    </script>
+    <style>
+        .hidden {
+            visibility: hidden;
+        }
+
+        #connected-indicator {
+            color: rgb(48, 202, 43);
+        } 
+
+        .status-indicator {
+            width: 100px;
+            height: 50px;
+            padding: 5px;
+            text-align: center;
+            vertical-align: top;
+            border: 4px solid black;
+            display: inline-block;
+        }
+
+        .status-indicator.active {
+            background-color: green;
+        }
+    </style>
+    <script>
+        function pageLoaded() {
+            startWebSocket();
+        }
+
+        function onClick() {
+            console.log("Click!");
+            
+            nanoajax.ajax({url: '/app/wiggle', method: 'GET' }, function (code, responseText, request) {
+                console.log(responseText);
+            });
+        }
+        
+        function callServer(apiEndpoint, args, resultCallback) {
+            nanoajax.ajax({
+                url: '/app/' + apiEndpoint,
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(args || {})
+            }, function (code, responseText, request) {
+                console.log(responseText);
+                if(resultCallback) {
+                    resultCallback(JSON.parse(responseText));
+                }
+            });
+        }
+
+        function feedPumpEnableClicked(checkbox) {
+          console.log("Checked: " + checkbox.checked);
+                        
+          callServer('setFeedPumpEnable', {enable: checkbox.checked});
+        }
+
+        function startWebSocket() {
+            var webSocket = new WebSocket("ws://" + location.hostname + "/ws");
+
+            webSocket.onmessage = function(event) {
+                console.log(event.data);
+            };
+
+            webSocket.onopen = function(event) {
+                console.log("WebSocket Connected");
+                document.querySelector("#connected-indicator").classList.remove("hidden");
+
+                callServer('getStatus', {}, statusUpdateHandler);
+            };
+
+            webSocket.onclose = function(event) {
+                console.log("WebSocket Disconnected");
+            };
+
+            webSocket.onmessage = function(event) {
+                var text = event.data;
+                console.log("WebSocket message", text);
+
+                if(!text || text.length < 2) return;
+                if(text[0] != '{') return;
+
+                // Looks like JSON
+                var args = JSON.parse(text);
+
+                var functionName = args["$function"];
+                if(!functionName) return;
+
+                var functionTarget = pushHandlers[functionName];                
+                if(!functionTarget) {
+                    console.warn("Unknown function: " + functionName);
+                    return;
+                }
+
+                functionTarget(args);
+            };
+        }
+
+        var statusFields = [
+            { field: "tankFillFloatSwitch", elementId: "tankFillStatus" }, 
+            { field: "boostPumpEnable", elementId: "boostPumpEnableStatus" },
+            { field: "handMode", elementId: "handModeStatus" },
+            { field: "autoMode", elementId: "autoModeStatus" },
+            { field: "pressureDetect", elementId: "pressureDetectStatus" },
+            { field: "inletValve", elementId: "inletValveStatus" },
+            { field: "feedPump", elementId: "feedPumpStatus" },
+            { field: "boostPump", elementId: "boostPumpStatus" }
+        ];
+
+        var stateText = {
+            Initializing: { id: 0, text: "Initializing" },
+            Off: { id: 1, text: "Off" },
+            Idle: { id: 2, text: "Idle"  },
+            FeedFlowStarted: { id: 3, text: "Feed Flow Started" },
+            BoostStarted: { id: 4, text: "Boost Started" },
+            RunningAuto: { id: 5, text: "Running, Auto" },
+            RunningHand: { id: 6, text: "Running, Hand" },
+            Faulted: { id: 7, text: "Faulted" }
+        };
+
+        var stateById = Object.values(stateText).reduce(function (result, entry) {
+            result[entry.id] = entry;
+            return result;
+        }, {});
+
+        function updateStatusElement(statusField, statusValues) {
+            document.getElementById(statusField.elementId).classList
+                .toggle("active", statusValues[statusField.field]);
+        }
+
+        function statusUpdateHandler(args) {
+            //console.log("statusUpdateHandler", args);
+                
+            document.getElementById("stateStatus").textContent = stateById[args.state].text;
+            document.getElementById("onCycleCount").textContent = args.onCycleCount;
+            
+            if(args.currentTime) {
+                var currentTime = new Date(args.currentTime);
+                document.getElementById("currentTime").textContent = currentTime.toISOString() + " (" + currentTime.toLocaleString() + ")";
+            }
+            
+            if(args.bootTime) {
+                var bootTime = new Date(args.bootTime);
+                document.getElementById("bootTime").textContent = bootTime.toISOString() + " (" + bootTime.toLocaleString() + ")";
+            }
+
+            // var upTime = currentTime - bootTime;
+            // var upTimeDuration = duratiform.divide(upTime, 4, true);
+            // document.getElementById("upTime").textContent = upTimeDuration.day + "d" + upTimeDuration.hour2 + "h" + upTimeDuration.minute2 + "m" + upTimeDuration.second2 + "s";
+
+            // var cycleStart = new Date(args.cycleStart);
+            // var cycleDuration_ms = args.cycleStart > 0 ? args.currentTime - args.cycleStart : 0;
+            // var cycleDuration = duratiform.divide(cycleDuration_ms, 3, true);
+            // document.getElementById("onCycleTime").textContent = cycleStart.toISOString() + " (" +
+            //     cycleDuration.hour2 + ":" + cycleDuration.minute2 + ":" + cycleDuration.second2 + ")";            
+
+            document.getElementById("inputPinsCapture").textContent = args.inputPinsCapture; 
+            document.getElementById("resetReason").textContent = args.resetReason; 
+            document.getElementById("feedPumpEnable").checked = args.feedPumpEnabled;         
+
+            statusFields.forEach(function(field) {
+                updateStatusElement(field, args);
+            });
+        }
+
+        var pushHandlers = {
+            statusUpdate: statusUpdateHandler
+        };
+    </script>
+
+    <h1> Reverse Osmosis Controller </h1>
+    <h5 id="connected-indicator" class="hidden">Connected</h5>
+    <h2 id="stateStatus">State</h2>
+
+    <div>
+        <div id="tankFillStatus" class="status-indicator">Tank Fill</div>
+        <div id="pressureDetectStatus" class="status-indicator">Pressure Detect</div>    
+        <div id="boostPumpEnableStatus" class="status-indicator">Boost Pump Enable</div>
+        <div id="handModeStatus" class="status-indicator">Hand Mode</div>
+        <div id="autoModeStatus" class="status-indicator">Auto Mode</div>
+    </div>
+
+    <div style="margin-top: 5px;">
+        <div id="inletValveStatus" class="status-indicator">Inlet Valve</div>
+        <div id="feedPumpStatus" class="status-indicator">Feed Pump</div>
+        <div id="boostPumpStatus" class="status-indicator">Boost Pump</div>    
+    </div>    
+    
+    <hr />
+    <div style="margin-top: 5px;">
+        On Cycles: <span id="onCycleCount"></span>
+        <div>On Cycle Time: <span id="onCycleTime"></span></div>
+    </div>
+    <div style="margin-top: 5px;">
+        <div>Current Time: <span id="currentTime"></span></div>
+        <div>Boot Time: <span id="bootTime"></span></div>
+        <div>Uptime: <span id="upTime"></span></div>
+    </div>    
+    <div style="margin-top: 5px;">
+        <div>Input pins: <span id="inputPinsCapture"></span></div>
+    </div>    
+    <div style="margin-top: 5px;">
+        <div>Reset Reason: <span id="resetReason"></span></div>
+    </div>        
+    <hr />
+    <label>Feed Pump Enable
+      <input id="feedPumpEnable" type="checkbox" onclick="feedPumpEnableClicked(this)">
+    </label>
+</body>
+</html>
