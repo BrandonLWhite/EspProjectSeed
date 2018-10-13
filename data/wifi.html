@@ -5,14 +5,210 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
     <title>Configure WiFi</title>
     <style>
-        div,input{padding:5px;font-size:1em;} 
-        input{width:95%;} 
-        body{text-align: center;font-family:verdana;} 
-        button{border:0;border-radius:0.3rem;background-color:#1fa3ec;color:#fff;line-height:2.4rem;font-size:1.2rem;width:100%;} 
+        body { 
+            text-align: center;
+            font-family: verdana;
+        } 
+
+        h1 {
+            margin-top: 10px;
+            margin-bottom: 10px;
+            color: #444;
+            font-weight: normal;
+        }
+
+        .container {
+            display: inline-block;
+            width: 100%;
+            box-sizing: border-box;
+            padding-left: 15px;
+            padding-right: 10px;
+        }
+
+        @media (min-width: 481px) {
+            .container {
+                max-width: 300px;
+            }
+        }        
+        
+        input, button {
+            width: 100%;
+            margin-top: 10px;
+            border-radius: 4px;
+        } 
+        
+        input {
+            padding: 10px;
+            font-size: 1em;
+            box-sizing: border-box;
+            border: 1px solid #999;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #2196f3;
+            box-shadow: 0 0 2px 2px #2196f3;
+        }
+
+        input:hover {
+            border-color: #1976d2;
+        }
+
+        button { 
+            border: 0;
+            background-color: #2196f3;
+            color:#fff;
+            line-height:2.4rem;
+            font-size:1.2rem;
+            padding: 8px 16px;
+            box-shadow: 0px 1px 5px 0px rgba(0, 0, 0, 0.2), 0px 2px 2px 0px rgba(0, 0, 0, 0.14), 0px 3px 1px -2px rgba(0, 0, 0, 0.12);
+            transition: background-color 250ms cubic-bezier(0.4, 0, 0.2, 1) 0ms,box-shadow 250ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;
+            cursor: pointer;
+        } 
+
+        button:hover {
+            background-color: #1976d2;
+        }
+
+        #status {
+            margin-top: 10px;
+        }
+
+        #scannedAccessPoints {
+            box-sizing: border-box;
+            margin-top: 10px;
+            font-size: 0.875rem;
+            display: table;
+            text-align: left;
+            width: 100%;
+            border: 1px solid #999;
+            border-radius: 4px;
+        }
+
+        .scannedAp {
+            display: table-row;
+            cursor: pointer;
+        }
+
+        .scannedAp:hover {
+            background-color: rgba(33, 150, 243, 0.1);
+        }
+
+        .scannedAp > div {
+            display: table-cell;
+            padding: 10px;
+            border-top: 1px solid #999;
+        }
+
+        .scannedAp:first-child > div {
+            border-top: none;
+        }
+
+        .unit {
+            font-size: 0.7rem;
+            color: #777;
+        }
+
+        .rssiIndicator {
+            width: 30px;
+        }
+
+        .scannedAp > div.rssiIndicator {
+            padding-left: 0;
+        }
+
+        .rssiIndicator > div {
+            width: 5px;
+            margin-left: 1px;
+            margin-right: 1px;
+            display: inline-block;
+            background-color: #AAA;
+        }
+
+        .rssiIndicator.poor > div:nth-child(-n+1) {
+            background-color: red;
+        }
+
+        .rssiIndicator.weak > div:nth-child(-n+2) {
+            background-color: #f9d015;
+        }
+
+        .rssiIndicator.good > div:nth-child(-n+3) {
+            background-color: rgb(0, 175, 0);
+        }
+
+        .rssiIndicator.strong > div:nth-child(-n+4) {
+            background-color: rgb(0, 175, 0);
+        }
+
+        .rssiIndicator > div:nth-child(1) {
+            height: 5px;
+        }
+
+        .rssiIndicator > div:nth-child(2) {
+            height: 10px;
+        }
+
+        .rssiIndicator > div:nth-child(3) {
+            height: 15px;
+        }
+        
+        .rssiIndicator > div:nth-child(4) {
+            height: 20px;
+        }
+
+        .spinner {
+            visibility: hidden;
+            opacity: 1;
+        }
+
+        .scanning .spinner {
+            visibility: visible;
+        }
+
+        @keyframes spinner {
+            to {transform: rotate(360deg);}
+        }
+        
+        .spinner:before {
+            content: '';
+            box-sizing: border-box;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 30px;
+            height: 30px;
+            margin-top: -15px;
+            margin-left: -15px;
+            border-radius: 50%;
+            border: 4px solid #ccc;
+            border-top-color: #333;
+            animation: spinner .6s linear infinite;
+        }
+
+        #scanBtn {
+            position: relative;
+        }
+
+        #scanBtn.scanning {
+            background-color: rgba(33, 150, 243, 0.3);
+        }
     </style>
     <script>
+        if(location.protocol === "file:") {
+            console.log("Loading mocks...");
+            const mockScript = document.createElement("script");
+            mockScript.src = "wifi.mocks.js";
+            document.head.appendChild(mockScript);
+        }
+
+        let scanBtn;
+        let inputSsid;
+
         window.onload = function() {
-            console.log("onload");
+            scanBtn = document.getElementById("scanBtn");
+            inputSsid = document.getElementById("inputSsid");
+
             getStatus();
             scanAccessPoints();
         }
@@ -35,7 +231,10 @@
         }
 
         function scanAccessPoints() {
+            scanBtn.classList.add("scanning");
+
             getJson("wifi/scan", scanResult => {
+                scanBtn.classList.remove("scanning");
                 console.log("wifi/scan", scanResult);
                 renderScannedAccessPoints(scanResult.accessPoints);
             });
@@ -45,48 +244,89 @@
             const container = document.getElementById("scannedAccessPoints");
             const entryElements = [];
             accessPoints.forEach(accessPoint => {
-                entryElements.push(`<div>
-                    <span>${accessPoint.SSID}</span>
-                    <span>${accessPoint.RSSI}</span>
+                entryElements.push(`<div class='scannedAp' onclick='selectAp("${accessPoint.SSID}")'>
+                    <div>${accessPoint.SSID}</div>
+                    <div>${accessPoint.RSSI} ${dbmUnit}</div>
+                    ${rssiBars(accessPoint.RSSI)}
                 </div>`);
             });
 
             container.innerHTML = entryElements.join("");
         }
 
+        function rssiBars(rssi) {
+            return `
+                <div class='rssiIndicator ${getStrengthClass(rssi)}'>
+                    ${"<div></div>".repeat(4)}
+                </div>`;
+        }
+
+        function getStrengthClass(rssi) {
+            if(rssi < -88) return "poor";
+            if(rssi < -74) return "weak";
+            if(rssi < -60) return "good";
+            return "strong";
+        }
+
+        function selectAp(name) {
+            document.getElementById("inputSsid").value = name;
+            document.getElementById("inputPassword").focus();
+        }
+
         function renderStatus(status) {
             const container = document.getElementById("status");
-            container.innerHTML = `
-                <span>${status.status}</span>
-                <span>${status.SSID}</span>
-                <span>${status.RSSI}</span>
-                <span>${status.IpAddr}</span>
-            `;
 
-            const inputSsid = document.getElementById("inputSsid");
+            if(!status) {
+                container.innerHTML = "<span>No access point configured.</span>";
+            }
+            
+            container.innerHTML = `
+                <span>${statusText[status.status]}</span>`;
+            
+            if(status.status === statusCode.CONNECTED) {
+                container.innerHTML += `
+                    <span>${status.RSSI} ${dbmUnit}</span>
+                    <span>${status.IpAddr}</span>`;
+            }
+
             if(!inputSsid.value) {
                 inputSsid.value = status.SSID;
             }
         }
+
+        const statusCode = {
+            NO_SSID_AVAIL: 1,
+            SCAN_COMPLETED: 2,
+            CONNECTED: 3,
+            CONNECT_FAILED: 4,
+            CONNECTION_LOST: 5,
+            DISCONNECTED: 6            
+        };
+
+        const statusText = {
+            [statusCode.NO_SSID_AVAIL]: "No SSID Configured",
+            [statusCode.SCAN_COMPLETED]: "Scan Completed",
+            [statusCode.CONNECTED]: "Connected",
+            [statusCode.CONNECT_FAILED]: "Failed to Connect",
+            [statusCode.CONNECTION_LOST]: "Connection Lost",
+            [statusCode.DISCONNECTED]: "Disconnected"
+        };
+
+        const dbmUnit = "<span class='unit'>dBm</span>";
     </script>
 </head>
 
 <body>
-    <div style='text-align:left;display:inline-block;min-width:260px;'>
+    <div class="container">
         <h1>Configure WiFi</h1>
         <form method='get' action='wifisave'>
-            <input id='inputSsid' name='s' length=32 placeholder='SSID'><br />
-            <input id='p' name='p' length=64 type='password' placeholder='password'><br />
-            <br />
+            <input id='inputSsid' name='s' length=32 placeholder='SSID'>
+            <input id='inputPassword' name='p' length=64 type='password' placeholder='password'>
             <button type='submit'>Save</button>
         </form>
-        <div>
-            <button onclick="forgetSaved()">Forget</button>
-        </div>    
         <div id="status"></div>
-        <div>
-            <button onclick="scanAccessPoints()">Scan</button>
-        </div>
+        <button onclick="forgetSaved()">Forget</button>        
+        <button id="scanBtn" onclick="scanAccessPoints()">Scan<div class="spinner"></div></button>
         <div id="scannedAccessPoints"></div>
     </div>
 </body>
