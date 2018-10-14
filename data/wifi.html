@@ -6,11 +6,13 @@
     <title>Configure WiFi</title>
     <style>
         body { 
-            text-align: center;
             font-family: verdana;
+            color: #444;
         } 
 
         h1 {
+            font-size: 32px;
+            text-align: center;
             margin-top: 10px;
             margin-bottom: 10px;
             color: #444;
@@ -25,12 +27,32 @@
             padding-right: 10px;
         }
 
+        /* Large than phone */
         @media (min-width: 481px) {
             .container {
-                max-width: 300px;
+                max-width: 400px;
             }
         }        
         
+        .row {
+            display: flex;
+        }
+
+        fieldset {
+            margin-top: 5px;
+            margin-bottom: 5px;
+            padding: 10px;
+            padding-top: 5px;
+            border: 1px solid #999;
+            border-radius: 4px;
+        }
+
+        legend {
+            text-align: left;
+            font-size: 12px;
+            color: #888;
+        }
+
         input, button {
             width: 100%;
             margin-top: 10px;
@@ -39,7 +61,7 @@
         
         input {
             padding: 10px;
-            font-size: 1em;
+            font-size: 16px;
             box-sizing: border-box;
             border: 1px solid #999;
         }
@@ -58,8 +80,8 @@
             border: 0;
             background-color: #2196f3;
             color:#fff;
-            line-height:2.4rem;
-            font-size:1.2rem;
+            line-height: 35px;
+            font-size: 20px;
             padding: 8px 16px;
             box-shadow: 0px 1px 5px 0px rgba(0, 0, 0, 0.2), 0px 2px 2px 0px rgba(0, 0, 0, 0.14), 0px 3px 1px -2px rgba(0, 0, 0, 0.12);
             transition: background-color 250ms cubic-bezier(0.4, 0, 0.2, 1) 0ms,box-shadow 250ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;
@@ -70,14 +92,25 @@
             background-color: #1976d2;
         }
 
-        #status {
+        #saveBtn {
+            width: 75%;
+            margin-right: 8px;
+        }
+
+        #forgetBtn {
+            width: auto;
+        }
+
+        .status {
+            font-size: 14px;
             margin-top: 10px;
+            margin-bottom: 15px;
         }
 
         #scannedAccessPoints {
             box-sizing: border-box;
             margin-top: 10px;
-            font-size: 0.875rem;
+            font-size: 14px;
             display: table;
             text-align: left;
             width: 100%;
@@ -98,6 +131,7 @@
             display: table-cell;
             padding: 10px;
             border-top: 1px solid #999;
+            vertical-align: middle;
         }
 
         .scannedAp:first-child > div {
@@ -105,12 +139,20 @@
         }
 
         .unit {
-            font-size: 0.7rem;
+            font-size: 11px;
             color: #777;
+            margin-left: 2px;
+        }
+
+        .scannedAp > div.rssiCell {
+            padding-bottom: 0;
+            padding-top: 0;
+            width: 25px;
         }
 
         .rssiIndicator {
-            width: 30px;
+            position: relative;
+            top: 3px;
         }
 
         .scannedAp > div.rssiIndicator {
@@ -119,7 +161,6 @@
 
         .rssiIndicator > div {
             width: 5px;
-            margin-left: 1px;
             margin-right: 1px;
             display: inline-block;
             background-color: #AAA;
@@ -193,6 +234,34 @@
         #scanBtn.scanning {
             background-color: rgba(33, 150, 243, 0.3);
         }
+
+        .staRssi {
+            margin-left: auto;
+            margin-right: 10px;
+        }
+
+        .staBars {
+        }
+
+        .staIp {
+            margin-left: 15px;
+            /* font-size: 14px; */
+        }
+
+        /* Phone */
+        @media (max-width: 480px) {
+            #status {
+                font-size: 16px;
+            }
+
+            #scannedAccessPoints {
+                font-size: 16px;
+            }
+
+            .scannedAp > div {
+                height: 30px;
+            }
+        }
     </style>
     <script>
         if(location.protocol === "file:") {
@@ -227,7 +296,9 @@
         }
 
         function forgetSaved() {
-            fetch("wifi/forget");
+            if(confirm("Are you sure that you want to disconnect and delete the currently configured WiFi Access Point and password?")) {
+                fetch("wifi/forget");
+            }
         }
 
         function scanAccessPoints() {
@@ -243,10 +314,11 @@
         function renderScannedAccessPoints(accessPoints) {
             const container = document.getElementById("scannedAccessPoints");
             const entryElements = [];
+
             accessPoints.forEach(accessPoint => {
                 entryElements.push(`<div class='scannedAp' onclick='selectAp("${accessPoint.SSID}")'>
                     <div>${accessPoint.SSID}</div>
-                    <div>${accessPoint.RSSI} ${dbmUnit}</div>
+                    <div>${accessPoint.RSSI}${dbmUnit}</div>
                     ${rssiBars(accessPoint.RSSI)}
                 </div>`);
             });
@@ -256,8 +328,10 @@
 
         function rssiBars(rssi) {
             return `
-                <div class='rssiIndicator ${getStrengthClass(rssi)}'>
-                    ${"<div></div>".repeat(4)}
+                <div class='rssiCell'>
+                    <div class='rssiIndicator ${getStrengthClass(rssi)}'>
+                        ${"<div></div>".repeat(4)}
+                    </div>
                 </div>`;
         }
 
@@ -275,19 +349,20 @@
 
         function renderStatus(status) {
             const container = document.getElementById("status");
-
-            if(!status) {
-                container.innerHTML = "<span>No access point configured.</span>";
-            }
-            
-            container.innerHTML = `
-                <span>${statusText[status.status]}</span>`;
+           
+            let html = `<div class='row'>
+                <div>${statusText[status.status]}</div>`;
             
             if(status.status === statusCode.CONNECTED) {
-                container.innerHTML += `
-                    <span>${status.RSSI} ${dbmUnit}</span>
-                    <span>${status.IpAddr}</span>`;
+                html += `
+                    <div class="staIp">${status.IpAddr}</div>
+                    <div class="staRssi">${status.RSSI}${dbmUnit}</div>
+                    <div class="staBars">${rssiBars(status.RSSI)}</div>`;
             }
+
+            html += "</div>";
+
+            container.innerHTML = html;
 
             if(!inputSsid.value) {
                 inputSsid.value = status.SSID;
@@ -295,6 +370,7 @@
         }
 
         const statusCode = {
+            IDLE_STATUS: 0,
             NO_SSID_AVAIL: 1,
             SCAN_COMPLETED: 2,
             CONNECTED: 3,
@@ -304,7 +380,8 @@
         };
 
         const statusText = {
-            [statusCode.NO_SSID_AVAIL]: "No SSID Configured",
+            [statusCode.IDLE_STATUS]: "No SSID Configured",
+            [statusCode.NO_SSID_AVAIL]: "No SSID Available",
             [statusCode.SCAN_COMPLETED]: "Scan Completed",
             [statusCode.CONNECTED]: "Connected",
             [statusCode.CONNECT_FAILED]: "Failed to Connect",
@@ -319,13 +396,18 @@
 <body>
     <div class="container">
         <h1>Configure WiFi</h1>
-        <form method='get' action='wifisave'>
-            <input id='inputSsid' name='s' length=32 placeholder='SSID'>
-            <input id='inputPassword' name='p' length=64 type='password' placeholder='password'>
-            <button type='submit'>Save</button>
+        <form method="get" action="wifisave">
+            <input id="inputSsid" name="s" length=32 placeholder="SSID">
+            <input id="inputPassword" name="p" length=64 type="password" placeholder="password">
+            <div class="row">
+                <button id="saveBtn" type="submit">Save</button>
+                <button id="forgetBtn" type="button" onclick="forgetSaved()">Forget</button>
+            </div>
         </form>
-        <div id="status"></div>
-        <button onclick="forgetSaved()">Forget</button>        
+        <fieldset class="status">
+            <legend>Status</legend>
+            <div id="status"></div>
+        </fieldset>
         <button id="scanBtn" onclick="scanAccessPoints()">Scan<div class="spinner"></div></button>
         <div id="scannedAccessPoints"></div>
     </div>
