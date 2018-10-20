@@ -2,6 +2,7 @@
 
 #include <deque>
 #include <functional>
+#include <Arduino.h>
 
 class TaskQueue
 {    

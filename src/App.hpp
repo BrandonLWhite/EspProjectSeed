@@ -1,34 +1,20 @@
 #pragma once
+#include <Framework.hpp>
 #include <Arduino.h>
 #include <Esp.h>
 #include <pins_arduino.h>
-#include <Ticker.h>
 #include <ArduinoJson.h>
 #include <FunctionalInterrupt.h>
 #include <FS.h>
 #include <time.h>
 #include <chrono>
 #include <sys/time.h>
-#include "TaskQueue.hpp"
-#include "Event.hpp"
-#include "Timer.hpp"
-
-typedef std::function<void(JsonObject&, JsonObject&)> ApiFunction;
-
-struct AppApi
-{
-    String Path;
-    ApiFunction Function;
-
-    AppApi(String path, ApiFunction function)
-    : Path(path), Function(function)
-    {        
-    }
-};
+#include <TaskQueue.hpp>
+#include <Timer.hpp>
 
 /**
 */
-class App
+class App : public Framework
 {    
 public:
     
@@ -59,14 +45,11 @@ public:
         InExample1 = D3
     };
 
-    Event<const JsonObject &> StatusUpdated;
-
-    App(TaskQueue & tasks)
-    : _tasks(tasks)
+    App()
     {
     }
 
-    const std::vector<AppApi> getApi()
+    const std::vector<AppApi> getApi() override 
     {
         return std::vector<AppApi>
         {
@@ -79,17 +62,15 @@ public:
         };
     }
 
-    void begin()
+    void begin() override
     {
     }
 
-    void notifyTimeAvailable()
+    void onTimeAvailable() override 
     {
     }
     
-private:
-    TaskQueue & _tasks;
-    
+private:    
     void notifyStatusUpdate()
     {
         DynamicJsonBuffer buffer;

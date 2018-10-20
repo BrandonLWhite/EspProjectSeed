@@ -23,6 +23,12 @@ public:
         _ticker.once_ms(milliseconds, &Timer::TickerCallback, this);        
     }
 
+    void attach_ms(uint32_t milliseconds, std::function<void(void)> callback)
+    {
+        _callback = callback;
+        _ticker.attach_ms(milliseconds, &Timer::TickerCallback, this);        
+    }
+
     void detach()
     {
         _ticker.detach();
