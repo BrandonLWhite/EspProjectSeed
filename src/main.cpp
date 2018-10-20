@@ -1,3 +1,8 @@
+/*
+TODOs:
+1) Break this out into a seperate file, to be called from the user's main.cpp
+   Maybe call it framework.cpp.
+*/
 #include <ESP8266WiFi.h>
 #include <ESP8266mDNS.h>
 #include <DNSServer.h>
@@ -120,11 +125,12 @@ TODO BW:
 */
 void initializeWiFi()
 {
-    myHostname = "ESP8266-" + String(ESP.getChipId(), HEX);
+    myHostname = "ESP-" + String(ESP.getChipId(), HEX);
     WiFi.hostname(myHostname);
 
     _onStationModeGotIpHandler = WiFi.onStationModeGotIP([](const WiFiEventStationModeGotIP &eventInfo) {
         Serial.println("Connection established to AP. Setting mode(WIFI_STA).");
+        dnsServer.stop();
         WiFi.softAPdisconnect();
         WiFi.mode(WIFI_STA);
         configTime(0, 0, "pool.ntp.org", "time.nist.gov");
@@ -156,21 +162,13 @@ void initializeWiFi()
     WiFi.begin();
 
     // Setup the DNS server redirecting all the domains to the apIP
+    dnsServer.stop();
     dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
     dnsServer.start(53, "*", WiFi.softAPIP());
 }
 
-// const char WIFI_CONFIG_HTML[] PROGMEM = "<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1, user-scalable=no\"/><title>Config ESP</title>"
-// "<style>.c{text-align: center;} div,input{padding:5px;font-size:1em;} input{width:95%;} body{text-align: center;font-family:verdana;} button{border:0;border-radius:0.3rem;background-color:#1fa3ec;color:#fff;line-height:2.4rem;font-size:1.2rem;width:100%;} .q{float: right;width: 64px;text-align: right;} .l{background: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAALVBMVEX///8EBwfBwsLw8PAzNjaCg4NTVVUjJiZDRUUUFxdiZGSho6OSk5Pg4eFydHTCjaf3AAAAZElEQVQ4je2NSw7AIAhEBamKn97/uMXEGBvozkWb9C2Zx4xzWykBhFAeYp9gkLyZE0zIMno9n4g19hmdY39scwqVkOXaxph0ZCXQcqxSpgQpONa59wkRDOL93eAXvimwlbPbwwVAegLS1HGfZAAAAABJRU5ErkJggg==\") no-repeat left center;background-size: 1em;}</style>"
-// "<script>function c(l){document.getElementById('s').value=l.innerText||l.textContent;document.getElementById('p').focus();}</script>"
-// "</head><body><div style='text-align:left;display:inline-block;min-width:260px;'><h1>Configure WiFi</h1>"
-// "<form method='get' action='wifisave'><input id='s' name='s' length=32 placeholder='SSID'><br/><input id='p' name='p' length=64 type='password' placeholder='password'><br/>"
-// "<br/><button type='submit'>save</button></form>"
-// "</div></body></html>";
-
 void handleWifiPageRequest(AsyncWebServerRequest *request)
 {
-    // request->send(200, "text/html", WIFI_CONFIG_HTML);
     request->send(SPIFFS, "/wifi.html");
 }
 
@@ -256,6 +254,7 @@ void setup()
     ArduinoOTA.begin();
 
     MDNS.addService("http", "tcp", 80);
+    //MDNS.addServiceTxt("Your App Name", "NoProto", "Key", "Value");
 
     SPIFFS.begin();
 
