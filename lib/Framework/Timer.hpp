@@ -12,7 +12,7 @@ class Timer
 {    
     Ticker _ticker;
     std::function<void(void)> _callback;
-    TaskQueue _tasks;
+    TaskQueue & _tasks;
 
     static void TickerCallback(Timer * timer)
     {
