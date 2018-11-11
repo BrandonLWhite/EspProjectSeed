@@ -1,5 +1,6 @@
 #pragma once
 
+#include <time.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266mDNS.h>
 #include <DNSServer.h>
@@ -114,141 +115,142 @@ class Framework
         }
     }
 
-/**
-TODO BW: 
-- Startup as just Station (Right now, we always start in dual mode, STA+AP).  Begin a timer for, say, 5 seconds.
-- When a WiFi connection is made, stop the timer (if running).
-- When the timer expires, if there is no WiFi connection, then start the soft AP and captive portal.
-- Is there a way to immediately detect no WiFi credentials? If so, then skip straight to soft AP on init if that's the case.
-  Yes, use WiFi.SSID() and if it is not empty, then assume we have a configuration.
-  
-- Implement a password for the soft AP.
-- Deal with being unable to connect to a station due to invalid SSID or password.
-- Implement workaround for https://github.com/esp8266/Arduino/issues/1615 .  
-  I'm thinking that if a client connects to the captive portal (eg. we are not connected as STA to anything),
-  then immediately stop the STA connect attempts `WiFi.disconnect();`
-- Deal with losing connection to station.  I'm thinking this should set the timer again, just like at bootup.
-  Maybe in this case the timer should be much longer?  This gets tricky with regard to security. This is one of those
-  cases where you probably need to require pushing a physical button on the device.  
-  ESP.eraseConfig() should blow away the SSID and password stored in flash.
-*/
-void initializeWiFi()
-{
-    myHostname = "ESP-" + String(ESP.getChipId(), HEX);
-    WiFi.hostname(myHostname);
-
-    _onStationModeGotIpHandler = WiFi.onStationModeGotIP([this](const WiFiEventStationModeGotIP &eventInfo) {
-        Serial.println("Connection established to AP. Setting mode(WIFI_STA).");
-        dnsServer.stop();
-        WiFi.softAPdisconnect();
-        WiFi.mode(WIFI_STA);
-        configTime(0, 0, "pool.ntp.org", "time.nist.gov");
-        
-        if(time(nullptr) == 0)
-        {
-            sntpPoller.attach_ms(500, [this]
-            { 
-                if(time(nullptr) != 0)
-                {
-                    sntpPoller.detach();
-                    onTimeAvailable();
-                }
-            });
-        }
-    });
-
-    _onStationModeDisconnectedHandler = WiFi.onStationModeDisconnected([](const WiFiEventStationModeDisconnected &) {
-        Serial.println("Lost connection to AP. TODO: start WIFI_AP_STA after delay.");
-    });
-
-    // Start WiFi as both Access Point (for captive portal config) and station.
-    // Once we connect to another AP as a station, then we kill the captive portal.
-    WiFi.mode(WIFI_AP_STA);
-    delay(100);
-    WiFi.softAP(myHostname.c_str());
-
-    // This starts the STA connection, using existing SSID/password config.
-    WiFi.begin();
-
-    // Setup the DNS server redirecting all the domains to the apIP
-    dnsServer.stop();
-    dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
-    dnsServer.start(53, "*", WiFi.softAPIP());
-}
-
-void handleWifiPageRequest(AsyncWebServerRequest *request)
-{
-    request->send(SPIFFS, "/wifi.html");
-}
-
-void sendJsonResponse(AsyncWebServerRequest &request, std::function<void(JsonObject& jsonResponse)> getJson) 
-{
-    auto * response = new AsyncJsonResponse();
-    auto & jsonResponse = response->getRoot();
-    getJson(jsonResponse);
-    response->setLength();
-    request.send(response);    // This will free the response once the request is complete.
-}
-
-void handleWifiScan(AsyncWebServerRequest *request)
-{
-    WiFi.scanNetworksAsync([this, request](int count) 
+    /**
+    TODO BW: 
+    - Startup as just Station (Right now, we always start in dual mode, STA+AP).  Begin a timer for, say, 5 seconds.
+    - When a WiFi connection is made, stop the timer (if running).
+    - When the timer expires, if there is no WiFi connection, then start the soft AP and captive portal.
+    - Is there a way to immediately detect no WiFi credentials? If so, then skip straight to soft AP on init if that's the case.
+    Yes, use WiFi.SSID() and if it is not empty, then assume we have a configuration.
+    
+    - Implement a password for the soft AP.
+    - Deal with being unable to connect to a station due to invalid SSID or password.
+    - Implement workaround for https://github.com/esp8266/Arduino/issues/1615 .  
+    I'm thinking that if a client connects to the captive portal (eg. we are not connected as STA to anything),
+    then immediately stop the STA connect attempts `WiFi.disconnect();`
+    - Deal with losing connection to station.  I'm thinking this should set the timer again, just like at bootup.
+    Maybe in this case the timer should be much longer?  This gets tricky with regard to security. This is one of those
+    cases where you probably need to require pushing a physical button on the device.  
+    ESP.eraseConfig() should blow away the SSID and password stored in flash.
+    */
+    void initializeWiFi()
     {
-        sendJsonResponse(*request, [count](JsonObject& jsonResponse) 
-        {
-            JsonArray& accessPoints = jsonResponse.createNestedArray("accessPoints");
-            for(int index = 0; index < count; ++index) 
+        myHostname = "ESP-" + String(ESP.getChipId(), HEX);
+        WiFi.hostname(myHostname);
+
+        _onStationModeGotIpHandler = WiFi.onStationModeGotIP([this](const WiFiEventStationModeGotIP &eventInfo) {
+            Serial.println("Connection established to AP. Setting mode(WIFI_STA).");
+            dnsServer.stop();
+            WiFi.softAPdisconnect();
+            WiFi.mode(WIFI_STA);
+            configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+            
+            if(time(nullptr) == 0)
             {
-                JsonObject& accessPoint = accessPoints.createNestedObject();
-                accessPoint["SSID"] = WiFi.SSID(index);
-                accessPoint["Encryption"] = WiFi.encryptionType(index);
-                accessPoint["RSSI"] = WiFi.RSSI(index);
+                sntpPoller.attach_ms(500, [this]
+                { 
+                    if(time(nullptr) != 0)
+                    {
+                        sntpPoller.detach();
+                        _bootTimestampMillisecondsUtc = GetCurrentUnixTimeMilliseconds();
+                        OnTimeAvailable();
+                    }
+                });
             }
         });
-    }, true);
-}
 
-void handleWifiStatus(AsyncWebServerRequest *request) {
-    sendJsonResponse(*request, [](JsonObject& json)
+        _onStationModeDisconnectedHandler = WiFi.onStationModeDisconnected([](const WiFiEventStationModeDisconnected &) {
+            Serial.println("Lost connection to AP. TODO: start WIFI_AP_STA after delay.");
+        });
+
+        // Start WiFi as both Access Point (for captive portal config) and station.
+        // Once we connect to another AP as a station, then we kill the captive portal.
+        WiFi.mode(WIFI_AP_STA);
+        delay(100);
+        WiFi.softAP(myHostname.c_str());
+
+        // This starts the STA connection, using existing SSID/password config.
+        WiFi.begin();
+
+        // Setup the DNS server redirecting all the domains to the apIP
+        dnsServer.stop();
+        dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
+        dnsServer.start(53, "*", WiFi.softAPIP());
+    }
+
+    void handleWifiPageRequest(AsyncWebServerRequest *request)
     {
-        json["status"] = (int)WiFi.status();
-        json["SSID"] = WiFi.SSID();
-        json["RSSI"] = WiFi.RSSI();
-        json["IpAddr"] = WiFi.localIP().toString();
-    });
-}
+        request->send(SPIFFS, "/wifi.html");
+    }
 
-void handleWifiSave(AsyncWebServerRequest *request)
-{
-    auto ssid = request->arg("s");
-    auto password = request->arg("p");
+    void sendJsonResponse(AsyncWebServerRequest &request, std::function<void(JsonObject& jsonResponse)> getJson) 
+    {
+        auto * response = new AsyncJsonResponse();
+        auto & jsonResponse = response->getRoot();
+        getJson(jsonResponse);
+        response->setLength();
+        request.send(response);    // This will free the response once the request is complete.
+    }
 
-    String response = "You configured: SSID=" + ssid + ", password=" + password;
-    response += "<br/>";
-    response += "Previously configured SSID=" + WiFi.SSID();
+    void handleWifiScan(AsyncWebServerRequest *request)
+    {
+        WiFi.scanNetworksAsync([this, request](int count) 
+        {
+            sendJsonResponse(*request, [count](JsonObject& jsonResponse) 
+            {
+                JsonArray& accessPoints = jsonResponse.createNestedArray("accessPoints");
+                for(int index = 0; index < count; ++index) 
+                {
+                    JsonObject& accessPoint = accessPoints.createNestedObject();
+                    accessPoint["SSID"] = WiFi.SSID(index);
+                    accessPoint["Encryption"] = WiFi.encryptionType(index);
+                    accessPoint["RSSI"] = WiFi.RSSI(index);
+                }
+            });
+        }, true);
+    }
 
-    request->send(200, "text/plain", response);
+    void handleWifiStatus(AsyncWebServerRequest *request) {
+        sendJsonResponse(*request, [](JsonObject& json)
+        {
+            json["status"] = (int)WiFi.status();
+            json["SSID"] = WiFi.SSID();
+            json["RSSI"] = WiFi.RSSI();
+            json["IpAddr"] = WiFi.localIP().toString();
+        });
+    }
 
-    // Disconnect from the current access point, then start connect with the new config.
-    //
-    WiFi.disconnect();
+    void handleWifiSave(AsyncWebServerRequest *request)
+    {
+        auto ssid = request->arg("s");
+        auto password = request->arg("p");
 
-    // Just save the new parameters.
-    //
-    WiFi.begin(ssid.c_str(), password.c_str(), 0, nullptr, false);
-    
-    // Then startup WiFi with our special sequence;
-    //
-    initializeWiFi();
-}
+        String response = "You configured: SSID=" + ssid + ", password=" + password;
+        response += "<br/>";
+        response += "Previously configured SSID=" + WiFi.SSID();
 
-void handleWifiForget(AsyncWebServerRequest *request)
-{    
-    request->send(200);
+        request->send(200, "text/plain", response);
 
-    WiFi.disconnect(true);
-    initializeWiFi();
-}
+        // Disconnect from the current access point, then start connect with the new config.
+        //
+        WiFi.disconnect();
+
+        // Just save the new parameters.
+        //
+        WiFi.begin(ssid.c_str(), password.c_str(), 0, nullptr, false);
+        
+        // Then startup WiFi with our special sequence;
+        //
+        initializeWiFi();
+    }
+
+    void handleWifiForget(AsyncWebServerRequest *request)
+    {    
+        request->send(200);
+
+        WiFi.disconnect(true);
+        initializeWiFi();
+    }
 
     void addApiRouteHandlers()
     {
@@ -269,6 +271,7 @@ void handleWifiForget(AsyncWebServerRequest *request)
 
 protected:
     TaskQueue tasks;
+    int64_t _bootTimestampMillisecondsUtc;
 
     Framework()
     :   server(80),
@@ -279,7 +282,24 @@ protected:
 
     virtual void begin() {}
 
-    virtual void onTimeAvailable() {}
+    virtual void OnTimeAvailable() {}
+
+    std::int64_t GetBootTimestampUnixMillisecondsUtc() 
+    {
+        return _bootTimestampMillisecondsUtc;
+    }
+
+    std::int64_t GetCurrentUnixTimeMilliseconds()
+    {
+        std::int64_t timestamp = time(nullptr);
+        timestamp *= 1000;
+
+        return timestamp;
+
+        // This used to work, now it does not.
+        // return std::chrono::duration_cast<std::chrono::milliseconds>(
+        //     std::chrono::system_clock::now().time_since_epoch()).count();
+    }    
 
     virtual const std::vector<AppApi> getApi() 
     {
