@@ -2,21 +2,34 @@
 
 #include <Ticker.h>
 #include <functional>
+#include "TaskQueue.hpp"
 
 /**
-Wrapper class around Ticker that allows use of std::functions and thus lambdas.
+Wrapper class around Ticker that allows use of std::functions and thus lambdas,
+and executes callback in a task handler.
 */
 class Timer 
 {    
     Ticker _ticker;
     std::function<void(void)> _callback;
+    TaskQueue _tasks;
 
     static void TickerCallback(Timer * timer)
     {
-        timer->_callback();
+        timer->OnTickerCallback();
+    }
+
+    void OnTickerCallback()
+    {
+        _tasks.add([this]() { _callback(); });
     }
 
 public:
+    Timer(TaskQueue & tasks)
+    : _tasks(tasks)
+    {
+    }
+
     void once_ms(uint32_t milliseconds, std::function<void(void)> callback)
     {
         _callback = callback;

@@ -30,6 +30,10 @@ struct AppApi
 
 class Framework
 {
+protected:
+    TaskQueue tasks;
+
+private:
     AsyncWebServer server;
     AsyncWebSocket ws;
     AsyncEventSource events;
@@ -269,14 +273,14 @@ class Framework
         }
     }
 
-protected:
-    TaskQueue tasks;
+protected:    
     int64_t _bootTimestampMillisecondsUtc;
 
     Framework()
     :   server(80),
         ws("/ws"),
-        events("/events")
+        events("/events"),
+        sntpPoller(tasks)
     {
     }
 
