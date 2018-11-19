@@ -26,6 +26,10 @@ public:
     {
     }
 
+    // Make the class non-copyable.
+    DigitalInput(const DigitalInput&) = delete;
+    DigitalInput& operator=(const DigitalInput&) = delete;
+
     int Channel() const { return _channel; }
 
     bool State() const { return _state; }

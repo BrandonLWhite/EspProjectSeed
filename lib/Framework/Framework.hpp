@@ -48,7 +48,7 @@ private:
     WiFiEventHandler _onStationModeGotIpHandler;
     WiFiEventHandler _onStationModeDisconnectedHandler;
     int64_t _bootTimestampMillisecondsUtc;
-    std::vector<DigitalInput> _digitalInputs;
+    std::vector<std::reference_wrapper<DigitalInput>> _digitalInputs;
     Timer _digitalInputdebounceTimer;
 
     void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len)
@@ -286,7 +286,7 @@ private:
         //
         for(auto & input : _digitalInputs)
         {
-            detachInterrupt(input.Channel());
+            detachInterrupt(input.get().Channel());
         }
 
         // This will abort any timer and start a new one. Exactly what we want.
@@ -298,8 +298,8 @@ private:
     {
         for(auto & input : _digitalInputs)
         {
-            attachInterrupt(input.Channel(), [this, &input] () { OnPinChanged(input); }, CHANGE);
-            input.Scan();
+            attachInterrupt(input.get().Channel(), [this, &input] () { OnPinChanged(input); }, CHANGE);
+            input.get().Scan();
         }
 
         OnInputsScanned();
