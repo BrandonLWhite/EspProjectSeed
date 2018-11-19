@@ -341,7 +341,7 @@ protected:
         return std::vector<AppApi>();
     }
 
-    void InitializeChannel(DigitalInput channel)
+    void InitializeChannel(DigitalInput & channel)
     {
         _digitalInputs.push_back(channel);
         channel.Initialize();
