@@ -1,10 +1,12 @@
 #pragma once
 
+#include <vector>
 #include <time.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266mDNS.h>
 #include <DNSServer.h>
 #include <ArduinoOTA.h>
+#include <FunctionalInterrupt.h>
 #include <FS.h>
 #include <Hash.h>
 #include <AsyncWebSocket.h>
@@ -14,6 +16,7 @@
 #include "Event.hpp"
 #include "TaskQueue.hpp"
 #include "Timer.hpp"
+#include "DigitalInput.hpp"
 
 typedef std::function<void(JsonObject&, JsonObject&)> ApiFunction;
 
@@ -44,6 +47,9 @@ private:
     String myHostname;
     WiFiEventHandler _onStationModeGotIpHandler;
     WiFiEventHandler _onStationModeDisconnectedHandler;
+    int64_t _bootTimestampMillisecondsUtc;
+    std::vector<DigitalInput> _digitalInputs;
+    Timer _digitalInputdebounceTimer;
 
     void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len)
     {
@@ -273,14 +279,39 @@ private:
         }
     }
 
-protected:    
-    int64_t _bootTimestampMillisecondsUtc;
+    void OnPinChanged(DigitalInput & changedInput)
+    {        
+        // Disable pin interrupts to stop flooding/hammering the interrupt. We will 
+        // do a full scan after the delay, below, then pin interrupts will be re-enabled.
+        //
+        for(auto & input : _digitalInputs)
+        {
+            detachInterrupt(input.Channel());
+        }
 
+        // This will abort any timer and start a new one. Exactly what we want.
+        //        
+        _digitalInputdebounceTimer.once_ms(20, [this]() { ScanAllInputs(); });
+    }
+
+    void ScanAllInputs()
+    {
+        for(auto & input : _digitalInputs)
+        {
+            attachInterrupt(input.Channel(), [this, &input] () { OnPinChanged(input); }, CHANGE);
+            input.Scan();
+        }
+
+        OnInputsScanned();
+    }
+
+protected:    
     Framework()
     :   server(80),
         ws("/ws"),
         events("/events"),
-        sntpPoller(tasks)
+        sntpPoller(tasks),
+        _digitalInputdebounceTimer(tasks)
     {
     }
 
@@ -309,6 +340,14 @@ protected:
     {
         return std::vector<AppApi>();
     }
+
+    void InitializeChannel(DigitalInput channel)
+    {
+        _digitalInputs.push_back(channel);
+        channel.Initialize();
+    }
+
+    virtual void OnInputsScanned() { }
 
 public:
     Event<const JsonObject &> StatusUpdated;
@@ -387,6 +426,7 @@ public:
         });
 
         begin();
+        ScanAllInputs();
     }
 
     void loop()
